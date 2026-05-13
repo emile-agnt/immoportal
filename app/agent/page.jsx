@@ -8,16 +8,21 @@ const supabase = createClient(
 )
 
 const stages = ["Recherche", "Offre", "Conditions", "Inspection", "Notaire"]
+const colors = ['bg-blue-900 text-blue-300', 'bg-amber-900 text-amber-300', 'bg-purple-900 text-purple-300', 'bg-green-900 text-green-300', 'bg-red-900 text-red-300']
+
+function getInitials(name) {
+  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+}
 
 export default function AgentDashboard() {
   const [clients, setClients] = useState([])
   const [showForm, setShowForm] = useState(false)
+  const [editingClient, setEditingClient] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({
-    name: '', email: '', phone: '', address: '',
-    price: '', mls: '', stage: 0, type: 'acheteur', language: 'fr', notes: ''
-  })
+  const [deleting, setDeleting] = useState(null)
+  const emptyForm = { name: '', email: '', phone: '', address: '', price: '', mls: '', stage: 0, type: 'acheteur', language: 'fr', notes: '' }
+  const [form, setForm] = useState(emptyForm)
 
   useEffect(() => { fetchClients() }, [])
 
@@ -28,20 +33,50 @@ export default function AgentDashboard() {
     setLoading(false)
   }
 
+  function openAdd() {
+    setEditingClient(null)
+    setForm(emptyForm)
+    setShowForm(true)
+  }
+
+  function openEdit(client) {
+    setEditingClient(client)
+    setForm({
+      name: client.name || '',
+      email: client.email || '',
+      phone: client.phone || '',
+      address: client.address || '',
+      price: client.price || '',
+      mls: client.mls || '',
+      stage: client.stage || 0,
+      type: client.type || 'acheteur',
+      language: client.language || 'fr',
+      notes: client.notes || ''
+    })
+    setShowForm(true)
+  }
+
   async function saveClient() {
     setSaving(true)
-    await supabase.from('clients').insert([form])
-    setForm({ name: '', email: '', phone: '', address: '', price: '', mls: '', stage: 0, type: 'acheteur', language: 'fr', notes: '' })
+    if (editingClient) {
+      await supabase.from('clients').update(form).eq('id', editingClient.id)
+    } else {
+      await supabase.from('clients').insert([form])
+    }
+    setForm(emptyForm)
     setShowForm(false)
+    setEditingClient(null)
     await fetchClients()
     setSaving(false)
   }
 
-  function getInitials(name) {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+  async function deleteClient(id) {
+    if (!confirm('Supprimer ce client?')) return
+    setDeleting(id)
+    await supabase.from('clients').delete().eq('id', id)
+    await fetchClients()
+    setDeleting(null)
   }
-
-  const colors = ['bg-blue-900 text-blue-300', 'bg-amber-900 text-amber-300', 'bg-purple-900 text-purple-300', 'bg-green-900 text-green-300', 'bg-red-900 text-red-300']
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -84,20 +119,20 @@ export default function AgentDashboard() {
           ))}
         </div>
 
-        {/* Header row */}
+        {/* Header */}
         <div className="flex items-center justify-between mb-3">
           <div className="text-xs text-gray-500 uppercase tracking-wider">Suivi des dossiers clients</div>
-          <button onClick={() => setShowForm(true)} className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg transition">
+          <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg transition">
             + Nouveau client
           </button>
         </div>
 
-        {/* Add client form */}
+        {/* Form */}
         {showForm && (
           <div className="bg-gray-900 border border-blue-800 rounded-xl p-5 mb-4">
             <div className="flex items-center justify-between mb-4">
-              <div className="font-medium">Nouveau client</div>
-              <button onClick={() => setShowForm(false)} className="text-gray-500 hover:text-white text-xl">×</button>
+              <div className="font-medium">{editingClient ? 'Modifier le client' : 'Nouveau client'}</div>
+              <button onClick={() => { setShowForm(false); setEditingClient(null) }} className="text-gray-500 hover:text-white text-xl">×</button>
             </div>
             <div className="grid grid-cols-2 gap-3">
               {[
@@ -127,7 +162,7 @@ export default function AgentDashboard() {
                 </select>
               </div>
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Étape</label>
+                <label className="text-xs text-gray-400 mb-1 block">Étape actuelle</label>
                 <select value={form.stage} onChange={e => setForm({ ...form, stage: parseInt(e.target.value) })}
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
                   {stages.map((s, i) => <option key={s} value={i}>{s}</option>)}
@@ -142,18 +177,18 @@ export default function AgentDashboard() {
                 </select>
               </div>
               <div className="col-span-2">
-                <label className="text-xs text-gray-400 mb-1 block">Notes</label>
+                <label className="text-xs text-gray-400 mb-1 block">Notes internes</label>
                 <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })}
-                  placeholder="Notes internes..."
+                  placeholder="Notes visibles seulement par l'agent..."
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 h-16 resize-none" />
               </div>
             </div>
             <div className="flex gap-3 mt-4">
               <button onClick={saveClient} disabled={!form.name || saving}
                 className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
-                {saving ? 'Enregistrement...' : 'Enregistrer le client'}
+                {saving ? 'Enregistrement...' : editingClient ? 'Mettre à jour' : 'Enregistrer'}
               </button>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-white text-sm px-4 py-2 rounded-lg border border-gray-700 transition">
+              <button onClick={() => { setShowForm(false); setEditingClient(null) }} className="text-gray-400 hover:text-white text-sm px-4 py-2 rounded-lg border border-gray-700 transition">
                 Annuler
               </button>
             </div>
@@ -172,13 +207,14 @@ export default function AgentDashboard() {
         ) : (
           <div className="space-y-3">
             {clients.map((c, idx) => (
-              <div key={c.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-start gap-4">
+              <div key={c.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-start gap-4 hover:border-gray-600 transition">
                 <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 ${colors[idx % colors.length]}`}>
                   {getInitials(c.name)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm">{c.name}</div>
                   <div className="text-xs text-gray-400 mt-0.5">{c.address} {c.price && `· ${c.price}`}</div>
+                  {c.email && <div className="text-xs text-gray-500 mt-0.5">{c.email} {c.phone && `· ${c.phone}`}</div>}
                   <div className="flex items-center gap-1 mt-1 flex-wrap">
                     <span className="text-xs text-gray-500">MLS:</span>
                     {c.mls ? (
@@ -195,6 +231,17 @@ export default function AgentDashboard() {
                     ))}
                     <span className="text-xs text-blue-400 ml-1">{stages[c.stage]}</span>
                   </div>
+                  {c.notes && <div className="text-xs text-gray-500 mt-1 italic">"{c.notes}"</div>}
+                </div>
+                <div className="flex flex-col gap-2 flex-shrink-0">
+                  <button onClick={() => openEdit(c)}
+                    className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition">
+                    Modifier
+                  </button>
+                  <button onClick={() => deleteClient(c.id)} disabled={deleting === c.id}
+                    className="text-xs bg-red-950 hover:bg-red-900 text-red-400 px-3 py-1.5 rounded-lg transition disabled:opacity-50">
+                    {deleting === c.id ? '...' : 'Supprimer'}
+                  </button>
                 </div>
               </div>
             ))}
