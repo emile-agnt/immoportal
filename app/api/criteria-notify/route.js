@@ -1,11 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY || ''
-const supabase = createClient(supabaseUrl, supabaseKey)
-
 export async function POST(req) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_KEY
+  )
+
   const { clientId, clientName, criteria } = await req.json()
 
   const { data: client } = await supabase
@@ -54,7 +55,7 @@ Stationnement extérieur: ${criteria.outdoor_parking || 'Non spécifié'}
 CARACTÉRISTIQUES
 Piscine: ${criteria.pool ? 'Oui' : 'Non'}
 Bord de l'eau: ${criteria.waterfront ? 'Oui' : 'Non'}
-Intergénérationnel: ${criteria.intergénérationnel ? 'Oui' : 'Non'}
+Intergénérationnel: ${criteria.intergenerational ? 'Oui' : 'Non'}
 Nouvelle construction: ${criteria.new_construction ? 'Oui' : 'Non'}
 
 INCONTOURNABLES
