@@ -1,11 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-)
+import { supabase } from '@/lib/supabase'
 
 const stages = ["Recherche", "Offre", "Conditions", "Inspection", "Notaire"]
 const colors = ['bg-blue-900 text-blue-300', 'bg-amber-900 text-amber-300', 'bg-purple-900 text-purple-300', 'bg-green-900 text-green-300', 'bg-red-900 text-red-300']
