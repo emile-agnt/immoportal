@@ -1,11 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-)
+import { supabase } from '@/lib/supabase'
 
 const propertyTypes = ['Maison', 'Condo', 'Duplex', 'Triplex', 'Quadruplex', 'Quintuplex', 'Terrain', 'Chalet', 'Autre']
 const buildingTypes = ['Isolé (détaché)', 'Jumelé', 'En rangée', 'En rangée sur coin', 'Quadrex', 'Tour d\'habitation']
