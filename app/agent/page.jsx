@@ -56,6 +56,7 @@ export default function AgentDashboard() {
 
   const emptyForm = {
     name: '', email: '', phone: '', address: '', price: '', mls: '',
+    agent_email: '',
     stage: 0, type: 'acheteur', language: 'fr', notes: '',
     deadline_inspection: '', deadline_financing: '',
     deadline_documents: '', deadline_clauses: '', deadline_deed: ''
@@ -86,6 +87,7 @@ export default function AgentDashboard() {
       address: client.address || '',
       price: client.price || '',
       mls: client.mls || '',
+      agent_email: client.agent_email || '',
       stage: client.stage || 0,
       type: client.type || 'acheteur',
       language: client.language || 'fr',
@@ -199,6 +201,7 @@ export default function AgentDashboard() {
                 { label: 'Adresse de la propriété', key: 'address', placeholder: '4782 rue des Érables, Laval' },
                 { label: 'Prix', key: 'price', placeholder: '549 000$' },
                 { label: 'Numéro MLS', key: 'mls', placeholder: '27084512' },
+            { label: "Courriel de l'agent (pour notifications)", key: 'agent_email', placeholder: 'agent@email.com' },
               ].map(f => (
                 <div key={f.key}>
                   <label className="text-xs text-gray-400 mb-1 block">{f.label}</label>
