@@ -80,7 +80,7 @@ Connectez-vous à ImmoPortal pour voir le dossier complet.
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          from: 'ImmoPortal <notifications@immoportal.ca>',
+          from: 'ImmoPortal <onboarding@resend.dev>',
           to: agentEmail,
           subject: `🏠 ${clientName} a mis à jour ses critères`,
           text: emailBody
