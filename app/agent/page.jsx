@@ -14,6 +14,23 @@ function getInitials(name) {
   return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
 }
 
+function daysUntil(dateStr) {
+  if (!dateStr) return null
+  const diff = Math.ceil((new Date(dateStr) - new Date()) / (1000 * 60 * 60 * 24))
+  return diff
+}
+
+function DeadlineBadge({ label, date }) {
+  if (!date) return null
+  const days = daysUntil(date)
+  const color = days < 0 ? 'bg-red-900 text-red-300' : days <= 3 ? 'bg-amber-900 text-amber-300' : 'bg-blue-900 text-blue-300'
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full ${color}`}>
+      {label}: {days < 0 ? `${Math.abs(days)}j dépassé` : days === 0 ? "Aujourd'hui" : `${days}j`}
+    </span>
+  )
+}
+
 export default function AgentDashboard() {
   const [clients, setClients] = useState([])
   const [showForm, setShowForm] = useState(false)
@@ -21,7 +38,14 @@ export default function AgentDashboard() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(null)
-  const emptyForm = { name: '', email: '', phone: '', address: '', price: '', mls: '', stage: 0, type: 'acheteur', language: 'fr', notes: '' }
+  const [updatingStage, setUpdatingStage] = useState(null)
+
+  const emptyForm = {
+    name: '', email: '', phone: '', address: '', price: '', mls: '',
+    stage: 0, type: 'acheteur', language: 'fr', notes: '',
+    deadline_inspection: '', deadline_financing: '',
+    deadline_documents: '', deadline_clauses: '', deadline_deed: ''
+  }
   const [form, setForm] = useState(emptyForm)
 
   useEffect(() => { fetchClients() }, [])
@@ -51,17 +75,26 @@ export default function AgentDashboard() {
       stage: client.stage || 0,
       type: client.type || 'acheteur',
       language: client.language || 'fr',
-      notes: client.notes || ''
+      notes: client.notes || '',
+      deadline_inspection: client.deadline_inspection || '',
+      deadline_financing: client.deadline_financing || '',
+      deadline_documents: client.deadline_documents || '',
+      deadline_clauses: client.deadline_clauses || '',
+      deadline_deed: client.deadline_deed || ''
     })
     setShowForm(true)
   }
 
   async function saveClient() {
     setSaving(true)
+    const payload = { ...form }
+    Object.keys(payload).forEach(k => {
+      if (k.startsWith('deadline_') && payload[k] === '') payload[k] = null
+    })
     if (editingClient) {
-      await supabase.from('clients').update(form).eq('id', editingClient.id)
+      await supabase.from('clients').update(payload).eq('id', editingClient.id)
     } else {
-      await supabase.from('clients').insert([form])
+      await supabase.from('clients').insert([payload])
     }
     setForm(emptyForm)
     setShowForm(false)
@@ -70,12 +103,38 @@ export default function AgentDashboard() {
     setSaving(false)
   }
 
+  async function updateStage(client, newStage) {
+    if (newStage < 0 || newStage >= stages.length) return
+    setUpdatingStage(client.id)
+    await supabase.from('clients').update({ stage: newStage }).eq('id', client.id)
+    await fetchClients()
+    setUpdatingStage(null)
+  }
+
   async function deleteClient(id) {
     if (!confirm('Supprimer ce client?')) return
     setDeleting(id)
     await supabase.from('clients').delete().eq('id', id)
     await fetchClients()
     setDeleting(null)
+  }
+
+  function generateCalendarUrl(client) {
+    const events = [
+      { label: 'Inspection', date: client.deadline_inspection },
+      { label: 'Financement', date: client.deadline_financing },
+      { label: 'Révision documents', date: client.deadline_documents },
+      { label: 'Autres clauses', date: client.deadline_clauses },
+      { label: 'Acte de vente', date: client.deadline_deed },
+    ].filter(e => e.date)
+
+    if (events.length === 0) return null
+
+    const first = events[0]
+    const start = first.date.replace(/-/g, '')
+    const title = encodeURIComponent(`${first.label} — ${client.name}`)
+    const details = encodeURIComponent(`Dossier: ${client.address}`)
+    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${start}&details=${details}`
   }
 
   return (
@@ -134,7 +193,9 @@ export default function AgentDashboard() {
               <div className="font-medium">{editingClient ? 'Modifier le client' : 'Nouveau client'}</div>
               <button onClick={() => { setShowForm(false); setEditingClient(null) }} className="text-gray-500 hover:text-white text-xl">×</button>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+
+            <div className="text-xs text-gray-500 uppercase tracking-wider mb-3">Informations client</div>
+            <div className="grid grid-cols-2 gap-3 mb-4">
               {[
                 { label: 'Nom complet', key: 'name', placeholder: 'Marie Bouchard' },
                 { label: 'Courriel', key: 'email', placeholder: 'marie@email.com' },
@@ -183,7 +244,29 @@ export default function AgentDashboard() {
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 h-16 resize-none" />
               </div>
             </div>
-            <div className="flex gap-3 mt-4">
+
+            <div className="text-xs text-gray-500 uppercase tracking-wider mb-3">Échéances</div>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              {[
+                { label: 'Inspection', key: 'deadline_inspection' },
+                { label: 'Financement', key: 'deadline_financing' },
+                { label: 'Révision des documents', key: 'deadline_documents' },
+                { label: 'Autres clauses', key: 'deadline_clauses' },
+                { label: 'Acte de vente (notaire)', key: 'deadline_deed' },
+              ].map(f => (
+                <div key={f.key}>
+                  <label className="text-xs text-gray-400 mb-1 block">{f.label}</label>
+                  <input
+                    type="date"
+                    value={form[f.key]}
+                    onChange={e => setForm({ ...form, [f.key]: e.target.value })}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-3 mt-2">
               <button onClick={saveClient} disabled={!form.name || saving}
                 className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
                 {saving ? 'Enregistrement...' : editingClient ? 'Mettre à jour' : 'Enregistrer'}
@@ -206,45 +289,81 @@ export default function AgentDashboard() {
           </div>
         ) : (
           <div className="space-y-3">
-            {clients.map((c, idx) => (
-              <div key={c.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-start gap-4 hover:border-gray-600 transition">
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 ${colors[idx % colors.length]}`}>
-                  {getInitials(c.name)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm">{c.name}</div>
-                  <div className="text-xs text-gray-400 mt-0.5">{c.address} {c.price && `· ${c.price}`}</div>
-                  {c.email && <div className="text-xs text-gray-500 mt-0.5">{c.email} {c.phone && `· ${c.phone}`}</div>}
-                  <div className="flex items-center gap-1 mt-1 flex-wrap">
-                    <span className="text-xs text-gray-500">MLS:</span>
-                    {c.mls ? (
-                      <span className="text-xs bg-green-900 text-green-300 px-2 py-0.5 rounded-full">{c.mls}</span>
-                    ) : (
-                      <span className="text-xs bg-amber-900 text-amber-300 px-2 py-0.5 rounded-full">À connecter</span>
-                    )}
-                    <span className="text-xs bg-purple-900 text-purple-300 px-2 py-0.5 rounded-full">{c.type}</span>
-                    <span className="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full">{c.language === 'fr' ? '🇫🇷 FR' : '🇬🇧 EN'}</span>
+            {clients.map((c, idx) => {
+              const calUrl = generateCalendarUrl(c)
+              return (
+                <div key={c.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-600 transition">
+                  <div className="flex items-start gap-4">
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 ${colors[idx % colors.length]}`}>
+                      {getInitials(c.name)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm">{c.name}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">{c.address} {c.price && `· ${c.price}`}</div>
+                      {c.email && <div className="text-xs text-gray-500 mt-0.5">{c.email} {c.phone && `· ${c.phone}`}</div>}
+                      <div className="flex items-center gap-1 mt-1 flex-wrap">
+                        {c.mls ? (
+                          <span className="text-xs bg-green-900 text-green-300 px-2 py-0.5 rounded-full">MLS {c.mls}</span>
+                        ) : (
+                          <span className="text-xs bg-amber-900 text-amber-300 px-2 py-0.5 rounded-full">MLS à connecter</span>
+                        )}
+                        <span className="text-xs bg-purple-900 text-purple-300 px-2 py-0.5 rounded-full">{c.type}</span>
+                        <span className="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full">{c.language === 'fr' ? '🇫🇷 FR' : '🇬🇧 EN'}</span>
+                      </div>
+
+                      {/* Stage updater */}
+                      <div className="flex items-center gap-2 mt-3">
+                        <button onClick={() => updateStage(c, c.stage - 1)} disabled={c.stage === 0 || updatingStage === c.id}
+                          className="w-6 h-6 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30 text-gray-300 text-xs flex items-center justify-center transition">
+                          ‹
+                        </button>
+                        {stages.map((s, i) => (
+                          <button key={s} onClick={() => updateStage(c, i)} disabled={updatingStage === c.id}
+                            title={s}
+                            className={`w-3 h-3 rounded-full transition ${i < c.stage ? "bg-green-500 hover:bg-green-400" : i === c.stage ? "bg-blue-500 ring-2 ring-blue-300" : "bg-gray-700 hover:bg-gray-500"}`} />
+                        ))}
+                        <button onClick={() => updateStage(c, c.stage + 1)} disabled={c.stage === stages.length - 1 || updatingStage === c.id}
+                          className="w-6 h-6 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30 text-gray-300 text-xs flex items-center justify-center transition">
+                          ›
+                        </button>
+                        <span className="text-xs text-blue-400">{stages[c.stage]}</span>
+                        {updatingStage === c.id && <span className="text-xs text-gray-500">...</span>}
+                      </div>
+
+                      {/* Deadlines */}
+                      {(c.deadline_inspection || c.deadline_financing || c.deadline_documents || c.deadline_clauses || c.deadline_deed) && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          <DeadlineBadge label="Inspection" date={c.deadline_inspection} />
+                          <DeadlineBadge label="Financement" date={c.deadline_financing} />
+                          <DeadlineBadge label="Documents" date={c.deadline_documents} />
+                          <DeadlineBadge label="Clauses" date={c.deadline_clauses} />
+                          <DeadlineBadge label="Acte de vente" date={c.deadline_deed} />
+                        </div>
+                      )}
+
+                      {c.notes && <div className="text-xs text-gray-500 mt-1 italic">"{c.notes}"</div>}
+                    </div>
+
+                    <div className="flex flex-col gap-2 flex-shrink-0">
+                      <button onClick={() => openEdit(c)}
+                        className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition">
+                        Modifier
+                      </button>
+                      {calUrl && (
+                        <a href={calUrl} target="_blank" rel="noopener noreferrer"
+                          className="text-xs bg-blue-950 hover:bg-blue-900 text-blue-300 px-3 py-1.5 rounded-lg transition text-center">
+                          + Calendrier
+                        </a>
+                      )}
+                      <button onClick={() => deleteClient(c.id)} disabled={deleting === c.id}
+                        className="text-xs bg-red-950 hover:bg-red-900 text-red-400 px-3 py-1.5 rounded-lg transition disabled:opacity-50">
+                        {deleting === c.id ? '...' : 'Supprimer'}
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 mt-2">
-                    {stages.map((s, i) => (
-                      <div key={s} className={`w-2.5 h-2.5 rounded-full ${i < c.stage ? "bg-green-500" : i === c.stage ? "bg-blue-500" : "bg-gray-700"}`} title={s} />
-                    ))}
-                    <span className="text-xs text-blue-400 ml-1">{stages[c.stage]}</span>
-                  </div>
-                  {c.notes && <div className="text-xs text-gray-500 mt-1 italic">"{c.notes}"</div>}
                 </div>
-                <div className="flex flex-col gap-2 flex-shrink-0">
-                  <button onClick={() => openEdit(c)}
-                    className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition">
-                    Modifier
-                  </button>
-                  <button onClick={() => deleteClient(c.id)} disabled={deleting === c.id}
-                    className="text-xs bg-red-950 hover:bg-red-900 text-red-400 px-3 py-1.5 rounded-lg transition disabled:opacity-50">
-                    {deleting === c.id ? '...' : 'Supprimer'}
-                  </button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
