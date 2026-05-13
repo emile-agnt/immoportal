@@ -228,6 +228,27 @@ export default function ClientPortal() {
           )}
         </div>
 
+     {/* Criteria link - only for buyers */}
+        {client.type === 'acheteur' && (
+          <a href="/client/criteria"
+            className="block bg-gray-900 border border-gray-800 hover:border-blue-700 rounded-2xl p-5 transition">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">
+                  {language === 'fr' ? 'Mes critères de recherche' : 'My search criteria'}
+                </div>
+                <div className="text-sm text-white font-medium">
+                  {language === 'fr' ? 'Définir ce que je cherche →' : 'Define what I\'m looking for →'}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {language === 'fr' ? 'Votre courtier sera notifié de chaque mise à jour' : 'Your agent will be notified of every update'}
+                </div>
+              </div>
+              <div className="text-2xl">🔍</div>
+            </div>
+          </a>
+        )}
+
       </div>
     </div>
   )
