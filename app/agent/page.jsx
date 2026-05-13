@@ -347,12 +347,13 @@ export default function AgentDashboard() {
                         className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition">
                         Modifier
                       </button>
-                      {generateCalendarUrls(c).length > 0 && (
+                      {(c.deadline_inspection || c.deadline_financing || c.deadline_documents || c.deadline_clauses || c.deadline_deed) && (
   <div className="relative group">
     <button className="text-xs bg-blue-950 hover:bg-blue-900 text-blue-300 px-3 py-1.5 rounded-lg transition text-center w-full">
-      + Calendrier ({generateCalendarUrls(c).length})
+      + Calendrier
     </button>
-    <div className="absolute right-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded-lg overflow-hidden z-10 hidden group-hover:block min-w-40">
+    <div className="absolute right-0 top-full mt-1 bg-gray-900 border border-gray-700 rounded-xl overflow-hidden z-20 hidden group-hover:block w-72 shadow-xl">
+      <div className="px-3 py-2 border-b border-gray-800 text-xs text-gray-500 uppercase tracking-wider">Ajouter les échéances</div>
       {[
         { label: 'Inspection', date: c.deadline_inspection },
         { label: 'Financement', date: c.deadline_financing },
@@ -363,12 +364,50 @@ export default function AgentDashboard() {
         const start = e.date.replace(/-/g, '')
         const title = encodeURIComponent(`${e.label} — ${c.name}`)
         const details = encodeURIComponent(`Dossier: ${c.address}`)
-        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${start}&details=${details}`
+        const googleUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${start}&details=${details}`
+        const outlookUrl = `https://outlook.live.com/calendar/0/deeplink/compose?subject=${title}&startdt=${e.date}&enddt=${e.date}&body=${details}`
+        const icsContent = [
+          'BEGIN:VCALENDAR',
+          'VERSION:2.0',
+          'CALSCALE:GREGORIAN',
+          'BEGIN:VEVENT',
+          `SUMMARY:${e.label} — ${c.name}`,
+          `DTSTART;VALUE=DATE:${start}`,
+          `DTEND;VALUE=DATE:${start}`,
+          `DESCRIPTION:Dossier: ${c.address}`,
+          'END:VEVENT',
+          'END:VCALENDAR'
+        ].join('\r\n')
+
         return (
-          <a key={e.label} href={url} target="_blank" rel="noopener noreferrer"
-            className="block px-3 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
-            📅 {e.label} — {e.date}
-          </a>
+          <div key={e.label} className="border-b border-gray-800 last:border-0">
+            <div className="px-3 pt-2 pb-1 text-xs font-medium text-white">
+              📅 {e.label} <span className="text-gray-500 font-normal">— {e.date}</span>
+            </div>
+            <div className="flex gap-1 px-3 pb-2">
+              <a href={googleUrl} target="_blank" rel="noopener noreferrer"
+                className="flex-1 text-center text-xs bg-gray-800 hover:bg-blue-900 hover:text-blue-300 text-gray-300 px-2 py-1.5 rounded-lg transition">
+                🇬 Google
+              </a>
+              <a href={outlookUrl} target="_blank" rel="noopener noreferrer"
+                className="flex-1 text-center text-xs bg-gray-800 hover:bg-blue-900 hover:text-blue-300 text-gray-300 px-2 py-1.5 rounded-lg transition">
+                🪟 Outlook
+              </a>
+              <button
+                onClick={() => {
+                  const blob = new Blob([icsContent], { type: 'text/calendar' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `${e.label}_${c.name.replace(' ', '_')}.ics`
+                  a.click()
+                  URL.revokeObjectURL(url)
+                }}
+                className="flex-1 text-center text-xs bg-gray-800 hover:bg-blue-900 hover:text-blue-300 text-gray-300 px-2 py-1.5 rounded-lg transition">
+                🍎 iCloud
+              </button>
+            </div>
+          </div>
         )
       })}
     </div>
