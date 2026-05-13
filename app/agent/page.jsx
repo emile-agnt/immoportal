@@ -31,6 +31,18 @@ function DeadlineBadge({ label, date }) {
   )
 }
 
+async function generateInviteLink(clientId, setInviteLinks) {
+  const res = await fetch('/api/invite', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientId })
+  })
+  const data = await res.json()
+  if (data.inviteUrl) {
+    setInviteLinks(prev => ({ ...prev, [clientId]: data.inviteUrl }))
+  }
+}
+
 export default function AgentDashboard() {
   const [clients, setClients] = useState([])
   const [showForm, setShowForm] = useState(false)
@@ -39,6 +51,8 @@ export default function AgentDashboard() {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(null)
   const [updatingStage, setUpdatingStage] = useState(null)
+  const [inviteLinks, setInviteLinks] = useState({})
+  const [copiedId, setCopiedId] = useState(null)
 
   const emptyForm = {
     name: '', email: '', phone: '', address: '', price: '', mls: '',
@@ -117,23 +131,6 @@ export default function AgentDashboard() {
     await supabase.from('clients').delete().eq('id', id)
     await fetchClients()
     setDeleting(null)
-  }
-
-  function generateCalendarUrls(client) {
-    return [
-      { label: 'Inspection', date: client.deadline_inspection },
-      { label: 'Financement', date: client.deadline_financing },
-      { label: 'Révision des documents', date: client.deadline_documents },
-      { label: 'Autres clauses', date: client.deadline_clauses },
-      { label: 'Acte de vente', date: client.deadline_deed },
-    ]
-      .filter(e => e.date)
-      .map(e => {
-        const start = e.date.replace(/-/g, '')
-        const title = encodeURIComponent(`${e.label} — ${client.name}`)
-        const details = encodeURIComponent(`Dossier: ${client.address}`)
-        return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${start}&details=${details}`
-      })
   }
 
   return (
@@ -288,140 +285,154 @@ export default function AgentDashboard() {
           </div>
         ) : (
           <div className="space-y-3">
-            {clients.map((c, idx) => {
-              return (
-                <div key={c.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-600 transition">
-                  <div className="flex items-start gap-4">
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 ${colors[idx % colors.length]}`}>
-                      {getInitials(c.name)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm">{c.name}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">{c.address} {c.price && `· ${c.price}`}</div>
-                      {c.email && <div className="text-xs text-gray-500 mt-0.5">{c.email} {c.phone && `· ${c.phone}`}</div>}
-                      <div className="flex items-center gap-1 mt-1 flex-wrap">
-                        {c.mls ? (
-                          <span className="text-xs bg-green-900 text-green-300 px-2 py-0.5 rounded-full">MLS {c.mls}</span>
-                        ) : (
-                          <span className="text-xs bg-amber-900 text-amber-300 px-2 py-0.5 rounded-full">MLS à connecter</span>
-                        )}
-                        <span className="text-xs bg-purple-900 text-purple-300 px-2 py-0.5 rounded-full">{c.type}</span>
-                        <span className="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full">{c.language === 'fr' ? '🇫🇷 FR' : '🇬🇧 EN'}</span>
-                      </div>
-
-                      {/* Stage updater */}
-                      <div className="flex items-center gap-2 mt-3">
-                        <button onClick={() => updateStage(c, c.stage - 1)} disabled={c.stage === 0 || updatingStage === c.id}
-                          className="w-6 h-6 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30 text-gray-300 text-xs flex items-center justify-center transition">
-                          ‹
-                        </button>
-                        {stages.map((s, i) => (
-                          <button key={s} onClick={() => updateStage(c, i)} disabled={updatingStage === c.id}
-                            title={s}
-                            className={`w-3 h-3 rounded-full transition ${i < c.stage ? "bg-green-500 hover:bg-green-400" : i === c.stage ? "bg-blue-500 ring-2 ring-blue-300" : "bg-gray-700 hover:bg-gray-500"}`} />
-                        ))}
-                        <button onClick={() => updateStage(c, c.stage + 1)} disabled={c.stage === stages.length - 1 || updatingStage === c.id}
-                          className="w-6 h-6 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30 text-gray-300 text-xs flex items-center justify-center transition">
-                          ›
-                        </button>
-                        <span className="text-xs text-blue-400">{stages[c.stage]}</span>
-                        {updatingStage === c.id && <span className="text-xs text-gray-500">...</span>}
-                      </div>
-
-                      {/* Deadlines */}
-                      {(c.deadline_inspection || c.deadline_financing || c.deadline_documents || c.deadline_clauses || c.deadline_deed) && (
-                        <div className="flex flex-wrap gap-1.5 mt-2">
-                          <DeadlineBadge label="Inspection" date={c.deadline_inspection} />
-                          <DeadlineBadge label="Financement" date={c.deadline_financing} />
-                          <DeadlineBadge label="Documents" date={c.deadline_documents} />
-                          <DeadlineBadge label="Clauses" date={c.deadline_clauses} />
-                          <DeadlineBadge label="Acte de vente" date={c.deadline_deed} />
-                        </div>
+            {clients.map((c, idx) => (
+              <div key={c.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-600 transition">
+                <div className="flex items-start gap-4">
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 ${colors[idx % colors.length]}`}>
+                    {getInitials(c.name)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm">{c.name}</div>
+                    <div className="text-xs text-gray-400 mt-0.5">{c.address} {c.price && `· ${c.price}`}</div>
+                    {c.email && <div className="text-xs text-gray-500 mt-0.5">{c.email} {c.phone && `· ${c.phone}`}</div>}
+                    <div className="flex items-center gap-1 mt-1 flex-wrap">
+                      {c.mls ? (
+                        <span className="text-xs bg-green-900 text-green-300 px-2 py-0.5 rounded-full">MLS {c.mls}</span>
+                      ) : (
+                        <span className="text-xs bg-amber-900 text-amber-300 px-2 py-0.5 rounded-full">MLS à connecter</span>
                       )}
-
-                      {c.notes && <div className="text-xs text-gray-500 mt-1 italic">"{c.notes}"</div>}
+                      <span className="text-xs bg-purple-900 text-purple-300 px-2 py-0.5 rounded-full">{c.type}</span>
+                      <span className="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full">{c.language === 'fr' ? '🇫🇷 FR' : '🇬🇧 EN'}</span>
                     </div>
 
-                    <div className="flex flex-col gap-2 flex-shrink-0">
-                      <button onClick={() => openEdit(c)}
+                    {/* Stage updater */}
+                    <div className="flex items-center gap-2 mt-3">
+                      <button onClick={() => updateStage(c, c.stage - 1)} disabled={c.stage === 0 || updatingStage === c.id}
+                        className="w-6 h-6 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30 text-gray-300 text-xs flex items-center justify-center transition">
+                        ‹
+                      </button>
+                      {stages.map((s, i) => (
+                        <button key={s} onClick={() => updateStage(c, i)} disabled={updatingStage === c.id}
+                          title={s}
+                          className={`w-3 h-3 rounded-full transition ${i < c.stage ? "bg-green-500 hover:bg-green-400" : i === c.stage ? "bg-blue-500 ring-2 ring-blue-300" : "bg-gray-700 hover:bg-gray-500"}`} />
+                      ))}
+                      <button onClick={() => updateStage(c, c.stage + 1)} disabled={c.stage === stages.length - 1 || updatingStage === c.id}
+                        className="w-6 h-6 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30 text-gray-300 text-xs flex items-center justify-center transition">
+                        ›
+                      </button>
+                      <span className="text-xs text-blue-400">{stages[c.stage]}</span>
+                      {updatingStage === c.id && <span className="text-xs text-gray-500">...</span>}
+                    </div>
+
+                    {/* Deadlines */}
+                    {(c.deadline_inspection || c.deadline_financing || c.deadline_documents || c.deadline_clauses || c.deadline_deed) && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        <DeadlineBadge label="Inspection" date={c.deadline_inspection} />
+                        <DeadlineBadge label="Financement" date={c.deadline_financing} />
+                        <DeadlineBadge label="Documents" date={c.deadline_documents} />
+                        <DeadlineBadge label="Clauses" date={c.deadline_clauses} />
+                        <DeadlineBadge label="Acte de vente" date={c.deadline_deed} />
+                      </div>
+                    )}
+
+                    {c.notes && <div className="text-xs text-gray-500 mt-1 italic">"{c.notes}"</div>}
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="flex flex-col gap-2 flex-shrink-0">
+                    <button onClick={() => openEdit(c)}
+                      className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition">
+                      Modifier
+                    </button>
+                    <button
+                      onClick={() => generateInviteLink(c.id, setInviteLinks)}
+                      className="text-xs bg-green-950 hover:bg-green-900 text-green-400 px-3 py-1.5 rounded-lg transition">
+                      🔗 Inviter
+                    </button>
+                    {inviteLinks[c.id] && (
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(inviteLinks[c.id])
+                          setCopiedId(c.id)
+                          setTimeout(() => setCopiedId(null), 2000)
+                        }}
                         className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition">
-                        Modifier
+                        {copiedId === c.id ? '✓ Copié!' : '📋 Copier lien'}
                       </button>
-                      {(c.deadline_inspection || c.deadline_financing || c.deadline_documents || c.deadline_clauses || c.deadline_deed) && (
-  <div className="relative group">
-    <button className="text-xs bg-blue-950 hover:bg-blue-900 text-blue-300 px-3 py-1.5 rounded-lg transition text-center w-full">
-      + Calendrier
-    </button>
-    <div className="absolute right-0 top-full mt-1 bg-gray-900 border border-gray-700 rounded-xl overflow-hidden z-20 hidden group-hover:block w-72 shadow-xl">
-      <div className="px-3 py-2 border-b border-gray-800 text-xs text-gray-500 uppercase tracking-wider">Ajouter les échéances</div>
-      {[
-        { label: 'Inspection', date: c.deadline_inspection },
-        { label: 'Financement', date: c.deadline_financing },
-        { label: 'Documents', date: c.deadline_documents },
-        { label: 'Clauses', date: c.deadline_clauses },
-        { label: 'Acte de vente', date: c.deadline_deed },
-      ].filter(e => e.date).map(e => {
-        const start = e.date.replace(/-/g, '')
-        const title = encodeURIComponent(`${e.label} — ${c.name}`)
-        const details = encodeURIComponent(`Dossier: ${c.address}`)
-        const googleUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${start}&details=${details}`
-        const outlookUrl = `https://outlook.live.com/calendar/0/deeplink/compose?subject=${title}&startdt=${e.date}&enddt=${e.date}&body=${details}`
-        const icsContent = [
-          'BEGIN:VCALENDAR',
-          'VERSION:2.0',
-          'CALSCALE:GREGORIAN',
-          'BEGIN:VEVENT',
-          `SUMMARY:${e.label} — ${c.name}`,
-          `DTSTART;VALUE=DATE:${start}`,
-          `DTEND;VALUE=DATE:${start}`,
-          `DESCRIPTION:Dossier: ${c.address}`,
-          'END:VEVENT',
-          'END:VCALENDAR'
-        ].join('\r\n')
-
-        return (
-          <div key={e.label} className="border-b border-gray-800 last:border-0">
-            <div className="px-3 pt-2 pb-1 text-xs font-medium text-white">
-              📅 {e.label} <span className="text-gray-500 font-normal">— {e.date}</span>
-            </div>
-            <div className="flex gap-1 px-3 pb-2">
-              <a href={googleUrl} target="_blank" rel="noopener noreferrer"
-                className="flex-1 text-center text-xs bg-gray-800 hover:bg-blue-900 hover:text-blue-300 text-gray-300 px-2 py-1.5 rounded-lg transition">
-                🇬 Google
-              </a>
-              <a href={outlookUrl} target="_blank" rel="noopener noreferrer"
-                className="flex-1 text-center text-xs bg-gray-800 hover:bg-blue-900 hover:text-blue-300 text-gray-300 px-2 py-1.5 rounded-lg transition">
-                🪟 Outlook
-              </a>
-              <button
-                onClick={() => {
-                  const blob = new Blob([icsContent], { type: 'text/calendar' })
-                  const url = URL.createObjectURL(blob)
-                  const a = document.createElement('a')
-                  a.href = url
-                  a.download = `${e.label}_${c.name.replace(' ', '_')}.ics`
-                  a.click()
-                  URL.revokeObjectURL(url)
-                }}
-                className="flex-1 text-center text-xs bg-gray-800 hover:bg-blue-900 hover:text-blue-300 text-gray-300 px-2 py-1.5 rounded-lg transition">
-                🍎 iCloud
-              </button>
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  </div>
-)}
-                      <button onClick={() => deleteClient(c.id)} disabled={deleting === c.id}
-                        className="text-xs bg-red-950 hover:bg-red-900 text-red-400 px-3 py-1.5 rounded-lg transition disabled:opacity-50">
-                        {deleting === c.id ? '...' : 'Supprimer'}
-                      </button>
-                    </div>
+                    )}
+                    {(c.deadline_inspection || c.deadline_financing || c.deadline_documents || c.deadline_clauses || c.deadline_deed) && (
+                      <div className="relative group">
+                        <button className="text-xs bg-blue-950 hover:bg-blue-900 text-blue-300 px-3 py-1.5 rounded-lg transition text-center w-full">
+                          + Calendrier
+                        </button>
+                        <div className="absolute right-0 top-full mt-1 bg-gray-900 border border-gray-700 rounded-xl overflow-hidden z-20 hidden group-hover:block w-72 shadow-xl">
+                          <div className="px-3 py-2 border-b border-gray-800 text-xs text-gray-500 uppercase tracking-wider">Ajouter les échéances</div>
+                          {[
+                            { label: 'Inspection', date: c.deadline_inspection },
+                            { label: 'Financement', date: c.deadline_financing },
+                            { label: 'Documents', date: c.deadline_documents },
+                            { label: 'Clauses', date: c.deadline_clauses },
+                            { label: 'Acte de vente', date: c.deadline_deed },
+                          ].filter(e => e.date).map(e => {
+                            const start = e.date.replace(/-/g, '')
+                            const title = encodeURIComponent(`${e.label} — ${c.name}`)
+                            const details = encodeURIComponent(`Dossier: ${c.address}`)
+                            const googleUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${start}&details=${details}`
+                            const outlookUrl = `https://outlook.live.com/calendar/0/deeplink/compose?subject=${title}&startdt=${e.date}&enddt=${e.date}&body=${details}`
+                            const icsContent = [
+                              'BEGIN:VCALENDAR',
+                              'VERSION:2.0',
+                              'CALSCALE:GREGORIAN',
+                              'BEGIN:VEVENT',
+                              `SUMMARY:${e.label} — ${c.name}`,
+                              `DTSTART;VALUE=DATE:${start}`,
+                              `DTEND;VALUE=DATE:${start}`,
+                              `DESCRIPTION:Dossier: ${c.address}`,
+                              'END:VEVENT',
+                              'END:VCALENDAR'
+                            ].join('\r\n')
+                            return (
+                              <div key={e.label} className="border-b border-gray-800 last:border-0">
+                                <div className="px-3 pt-2 pb-1 text-xs font-medium text-white">
+                                  📅 {e.label} <span className="text-gray-500 font-normal">— {e.date}</span>
+                                </div>
+                                <div className="flex gap-1 px-3 pb-2">
+                                  <a href={googleUrl} target="_blank" rel="noopener noreferrer"
+                                    className="flex-1 text-center text-xs bg-gray-800 hover:bg-blue-900 hover:text-blue-300 text-gray-300 px-2 py-1.5 rounded-lg transition">
+                                    🇬 Google
+                                  </a>
+                                  <a href={outlookUrl} target="_blank" rel="noopener noreferrer"
+                                    className="flex-1 text-center text-xs bg-gray-800 hover:bg-blue-900 hover:text-blue-300 text-gray-300 px-2 py-1.5 rounded-lg transition">
+                                    🪟 Outlook
+                                  </a>
+                                  <button
+                                    onClick={() => {
+                                      const blob = new Blob([icsContent], { type: 'text/calendar' })
+                                      const url = URL.createObjectURL(blob)
+                                      const a = document.createElement('a')
+                                      a.href = url
+                                      a.download = `${e.label}_${c.name.replace(' ', '_')}.ics`
+                                      a.click()
+                                      URL.revokeObjectURL(url)
+                                    }}
+                                    className="flex-1 text-center text-xs bg-gray-800 hover:bg-blue-900 hover:text-blue-300 text-gray-300 px-2 py-1.5 rounded-lg transition">
+                                    🍎 iCloud
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    <button onClick={() => deleteClient(c.id)} disabled={deleting === c.id}
+                      className="text-xs bg-red-950 hover:bg-red-900 text-red-400 px-3 py-1.5 rounded-lg transition disabled:opacity-50">
+                      {deleting === c.id ? '...' : 'Supprimer'}
+                    </button>
                   </div>
                 </div>
-              )
-            })}
+              </div>
+            ))}
           </div>
         )}
       </div>
