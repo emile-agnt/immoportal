@@ -348,11 +348,31 @@ export default function AgentDashboard() {
                         Modifier
                       </button>
                       {generateCalendarUrls(c).length > 0 && (
-  <button
-    onClick={() => generateCalendarUrls(c).forEach((url, i) => setTimeout(() => window.open(url, '_blank'), i * 500))}
-    className="text-xs bg-blue-950 hover:bg-blue-900 text-blue-300 px-3 py-1.5 rounded-lg transition text-center">
-    + Calendrier ({generateCalendarUrls(c).length})
-  </button>
+  <div className="relative group">
+    <button className="text-xs bg-blue-950 hover:bg-blue-900 text-blue-300 px-3 py-1.5 rounded-lg transition text-center w-full">
+      + Calendrier ({generateCalendarUrls(c).length})
+    </button>
+    <div className="absolute right-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded-lg overflow-hidden z-10 hidden group-hover:block min-w-40">
+      {[
+        { label: 'Inspection', date: c.deadline_inspection },
+        { label: 'Financement', date: c.deadline_financing },
+        { label: 'Documents', date: c.deadline_documents },
+        { label: 'Clauses', date: c.deadline_clauses },
+        { label: 'Acte de vente', date: c.deadline_deed },
+      ].filter(e => e.date).map(e => {
+        const start = e.date.replace(/-/g, '')
+        const title = encodeURIComponent(`${e.label} — ${c.name}`)
+        const details = encodeURIComponent(`Dossier: ${c.address}`)
+        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${start}&details=${details}`
+        return (
+          <a key={e.label} href={url} target="_blank" rel="noopener noreferrer"
+            className="block px-3 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+            📅 {e.label} — {e.date}
+          </a>
+        )
+      })}
+    </div>
+  </div>
 )}
                       <button onClick={() => deleteClient(c.id)} disabled={deleting === c.id}
                         className="text-xs bg-red-950 hover:bg-red-900 text-red-400 px-3 py-1.5 rounded-lg transition disabled:opacity-50">
