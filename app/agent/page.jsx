@@ -119,22 +119,21 @@ export default function AgentDashboard() {
     setDeleting(null)
   }
 
-  function generateCalendarUrl(client) {
-    const events = [
+  function generateCalendarUrls(client) {
+    return [
       { label: 'Inspection', date: client.deadline_inspection },
       { label: 'Financement', date: client.deadline_financing },
-      { label: 'Révision documents', date: client.deadline_documents },
+      { label: 'Révision des documents', date: client.deadline_documents },
       { label: 'Autres clauses', date: client.deadline_clauses },
       { label: 'Acte de vente', date: client.deadline_deed },
-    ].filter(e => e.date)
-
-    if (events.length === 0) return null
-
-    const first = events[0]
-    const start = first.date.replace(/-/g, '')
-    const title = encodeURIComponent(`${first.label} — ${client.name}`)
-    const details = encodeURIComponent(`Dossier: ${client.address}`)
-    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${start}&details=${details}`
+    ]
+      .filter(e => e.date)
+      .map(e => {
+        const start = e.date.replace(/-/g, '')
+        const title = encodeURIComponent(`${e.label} — ${client.name}`)
+        const details = encodeURIComponent(`Dossier: ${client.address}`)
+        return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${start}&details=${details}`
+      })
   }
 
   return (
@@ -290,7 +289,6 @@ export default function AgentDashboard() {
         ) : (
           <div className="space-y-3">
             {clients.map((c, idx) => {
-              const calUrl = generateCalendarUrl(c)
               return (
                 <div key={c.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-600 transition">
                   <div className="flex items-start gap-4">
@@ -349,12 +347,13 @@ export default function AgentDashboard() {
                         className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition">
                         Modifier
                       </button>
-                      {calUrl && (
-                        <a href={calUrl} target="_blank" rel="noopener noreferrer"
-                          className="text-xs bg-blue-950 hover:bg-blue-900 text-blue-300 px-3 py-1.5 rounded-lg transition text-center">
-                          + Calendrier
-                        </a>
-                      )}
+                      {generateCalendarUrls(c).length > 0 && (
+  <button
+    onClick={() => generateCalendarUrls(c).forEach((url, i) => setTimeout(() => window.open(url, '_blank'), i * 500))}
+    className="text-xs bg-blue-950 hover:bg-blue-900 text-blue-300 px-3 py-1.5 rounded-lg transition text-center">
+    + Calendrier ({generateCalendarUrls(c).length})
+  </button>
+)}
                       <button onClick={() => deleteClient(c.id)} disabled={deleting === c.id}
                         className="text-xs bg-red-950 hover:bg-red-900 text-red-400 px-3 py-1.5 rounded-lg transition disabled:opacity-50">
                         {deleting === c.id ? '...' : 'Supprimer'}
